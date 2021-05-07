@@ -5,6 +5,7 @@ import argparse
 import imutils
 import time
 import cv2
+import numpy as np
 import pandas as pd
 from pypylon import pylon
 
@@ -59,6 +60,13 @@ converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
 # initialize the FPS throughput estimator
 fps = None
 
+#Initialize Coordinate recording, up to 100 points
+MAXCOORDS = 100
+xf = np.zeros(MAXCOORDS)
+yf = np.zeros(MAXCOORDS)
+u = 0
+
+
 # loop over frames from the video stream
 
 while True:
@@ -90,25 +98,40 @@ while True:
         if initBB is not None:
 		    # grab the new bounding box coordinates of the object
             (success, box) = tracker.update(frame)
+
 		    # check to see if the tracking was a success
             if success:
                 (x, y, w, h) = [int(v) for v in box]
                 cv2.rectangle(frame, (x, y), (x + w, y + h),
 				    (145, 77, 80), 2)
+                PositionTuple = (x + w/ 2, y + h /2)
+            
 
 		    # update the FPS counter
             fps.update()
             fps.stop()
+
+
 		    # initialize the set of information we'll be displaying on
 		    # the frame
             Position = (x + w/ 2, y + h /2)
             info = [
+            ("Position", PositionTuple),
 			("Tracker", args["tracker"]),
 			("Success", "Yes" if success else "No"),
-			("FPS", "{:.2f}".format(fps.fps())),
-            ("Position", Position )
+			("FPS", "{:.2f}".format(fps.fps()))
 		    ]
-		    # loop over the info tuples and draw them on our frame
+            xposition, yposition = PositionTuple
+
+            #MAIN LOOP FOR STORING COORDS
+
+            if u < MAXCOORDS:
+                xf[u] = xposition
+                yf[u] = yposition
+                u= u+1
+
+
+			# loop over the info tuples and draw them on our frame
             for (i, (k, v)) in enumerate(info):
                 text = "{}: {}".format(k, v)
                 cv2.putText(frame, text, (10, H - ((i * 20) + 20)),
@@ -133,8 +156,16 @@ while True:
         tracker.init(frame, initBB)
         fps = FPS().start()
 
+
 	# if the `q` key was pressed, break from the loop
     elif key == ord("x"):
         break
 
 cv2.destroyAllWindows()
+
+
+#Showing DataFrame made from stored points
+
+df = pd.DataFrame({'X-Position':xf, 'Y-Position':yf})
+print(df)
+df.to_csv('POSITION.csv', index= False)
